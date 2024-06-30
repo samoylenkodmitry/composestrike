@@ -180,14 +180,14 @@ fun Application.module() {
         }
     }
     routing {
-        val jwtAlgorithm = loadJWTKey()
-        val jwtVerifier = JWT.require(jwtAlgorithm).withIssuer(issuer).build()
         get("/") { call.respondText("hi from backend") }
         get("/favicon.ico") {
             println("Favicon requested")
             call.respondBytes(SQUARE_ICON_BYTES, ContentType.Image.SVG)
         }
         if (AUTH_ENABLED) {
+            val jwtAlgorithm = loadJWTKey()
+            val jwtVerifier = JWT.require(jwtAlgorithm).withIssuer(issuer).build()
             static(".well-known") {
                 staticRootFolder = File(certsPath)
                 static("jwks.json") {
