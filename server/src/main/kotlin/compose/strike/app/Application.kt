@@ -127,7 +127,7 @@ private fun getDatabaseUser() =
 
 private fun getDatabaseUrl() =
     if (IS_LOCALHOST) {
-        "jdbc:postgresql://0.0.0.0:5432/strike"
+        "jdbc:postgresql://postgres:5432/strike"
     } else {
         System.getenv("DATABASE_URL").takeIf { !it.isNullOrBlank() }.also { println("DATABASE_URL from env: $it") }
             ?: "jdbc:postgresql://postgres:5432/strike"
@@ -136,7 +136,7 @@ private fun getDatabaseUrl() =
 // https://github.com/ktorio/ktor-documentation/blob/2.3.10/codeSnippets/snippets/auth-jwt-rs256/src/main/kotlin/com/example/Application.kt
 fun Application.module() {
     val game = Game()
-    install(io.ktor.server.websocket.WebSockets) {
+    install(WebSockets) {
         pingPeriod = Duration.ofSeconds(15)
         timeout = Duration.ofSeconds(15)
         maxFrameSize = Long.MAX_VALUE
