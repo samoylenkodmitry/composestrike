@@ -6,6 +6,7 @@
 
 package compose.strike.app
 
+import AUTH_ENABLED
 import AuthResult
 import Challenge
 import DIFFICULTY_PREFIX
@@ -157,123 +158,127 @@ fun Application.module() {
     val issuer = hostUrl
     val audience = "composestrike.app"
     val myRealm = "composestrike.app"
-    val jwtAlgorithm = loadJWTKey()
-    val jwtVerifier = JWT.require(jwtAlgorithm).withIssuer(issuer).build()
+    if (AUTH_ENABLED) {
+        val jwtAlgorithm = loadJWTKey()
+        val jwtVerifier = JWT.require(jwtAlgorithm).withIssuer(issuer).build()
 
-    install(Authentication) {
-        jwt("auth-jwt") {
-            realm = myRealm
-            verifier(jwtVerifier)
-            validate { credential ->
-                if (credential.payload.audience.contains(audience)) {
-                    JWTPrincipal(credential.payload)
-                } else {
-                    null
+        install(Authentication) {
+            jwt("auth-jwt") {
+                realm = myRealm
+                verifier(jwtVerifier)
+                validate { credential ->
+                    if (credential.payload.audience.contains(audience)) {
+                        JWTPrincipal(credential.payload)
+                    } else {
+                        null
+                    }
                 }
-            }
-            challenge { _, _ ->
-                call.respond(HttpStatusCode.Unauthorized, "Token is not valid or expired")
+                challenge { _, _ ->
+                    call.respond(HttpStatusCode.Unauthorized, "Token is not valid or expired")
+                }
             }
         }
     }
     routing {
+        val jwtAlgorithm = loadJWTKey()
+        val jwtVerifier = JWT.require(jwtAlgorithm).withIssuer(issuer).build()
         get("/") { call.respondText("hi from backend") }
         get("/favicon.ico") {
             println("Favicon requested")
             call.respondBytes(SQUARE_ICON_BYTES, ContentType.Image.SVG)
         }
-        File(certsPath).walkTopDown().forEach { println(it) }
-        File(certsPath, "jwks.json").readText().also { println(it) }
-        static(".well-known") {
-            staticRootFolder = File(certsPath)
-            static("jwks.json") {
-                files("jwks.json")
+        if (AUTH_ENABLED) {
+            static(".well-known") {
+                staticRootFolder = File(certsPath)
+                static("jwks.json") {
+                    files("jwks.json")
+                }
             }
-        }
-        get("/debug/jwks") {
-            val jwksFile = File(certsPath, "jwks.json")
-            if (jwksFile.exists()) {
-                println("Serving JWKS")
-                call.respondText(jwksFile.readText())
-            } else {
-                println("JWKS not found")
-                call.respondText("File not found", status = HttpStatusCode.NotFound)
+            get("/debug/jwks") {
+                val jwksFile = File(certsPath, "jwks.json")
+                if (jwksFile.exists()) {
+                    println("Serving JWKS")
+                    call.respondText(jwksFile.readText())
+                } else {
+                    println("JWKS not found")
+                    call.respondText("File not found", status = HttpStatusCode.NotFound)
+                }
             }
-        }
-        get(Endpoints.powGet.path) {
-            call.respond(issueChallenge(jwtAlgorithm))
-        }
-        post(Endpoints.powPost()) {
-            var respondError = suspend {}
-            receiveArgs(it) { proofOfWork ->
-                if (validateChallengeSolution(proofOfWork, jwtAlgorithm)) {
-                    val createdUser = addUser("user", proofOfWork.challenge)
-                    if (createdUser != null) {
-                        // create JWT refreshToken, infinity lifetime
-                        val refreshToken =
-                            JWT
-                                .create()
-                                .withAudience(audience)
-                                .withIssuer(issuer)
-                                .withClaim(CLAIM_USER_ID, createdUser.id)
-                                .sign(jwtAlgorithm)
-                        // create JWT sessionToken
+            get(Endpoints.powGet.path) {
+                call.respond(issueChallenge(jwtAlgorithm))
+            }
+            post(Endpoints.powPost()) {
+                var respondError = suspend {}
+                receiveArgs(it) { proofOfWork ->
+                    if (validateChallengeSolution(proofOfWork, jwtAlgorithm)) {
+                        val createdUser = addUser("user", proofOfWork.challenge)
+                        if (createdUser != null) {
+                            // create JWT refreshToken, infinity lifetime
+                            val refreshToken =
+                                JWT
+                                    .create()
+                                    .withAudience(audience)
+                                    .withIssuer(issuer)
+                                    .withClaim(CLAIM_USER_ID, createdUser.id)
+                                    .sign(jwtAlgorithm)
+                            // create JWT sessionToken
+                            val sessionToken =
+                                JWT
+                                    .create()
+                                    .withAudience(audience)
+                                    .withIssuer(issuer)
+                                    .withExpiresAt(
+                                        Instant
+                                            .now()
+                                            .plus(1L, ChronoUnit.DAYS)
+                                            .plus((0..1000).random().toLong(), ChronoUnit.MILLIS),
+                                    ).withClaim(CLAIM_USER_ID, createdUser.id)
+                                    .sign(jwtAlgorithm)
+                            AuthResult(refreshToken, sessionToken, createdUser)
+                        } else {
+                            respondError = { call.respond(HttpStatusCode.Conflict, "User already exists") }
+                            null
+                        }
+                    } else {
+                        respondError = { call.respond(HttpStatusCode.BadRequest, "Invalid Proof of Work Solution") }
+                        null
+                    }
+                }?.let { authResult -> call.respond(HttpStatusCode.Created, authResult) } ?: respondError()
+            }
+            post(Endpoints.tokenRefresh()) {
+                receiveArgs(it) { refreshToken ->
+                    val jwt = jwtVerifier.verify(refreshToken.refreshToken)
+                    val userId = jwt.getClaim(CLAIM_USER_ID).asLong()
+                    val user = getUser(userId)
+                    if (user != null) {
                         val sessionToken =
                             JWT
                                 .create()
                                 .withAudience(audience)
                                 .withIssuer(issuer)
-                                .withExpiresAt(
-                                    Instant
-                                        .now()
-                                        .plus(1L, ChronoUnit.DAYS)
-                                        .plus((0..1000).random().toLong(), ChronoUnit.MILLIS),
-                                ).withClaim(CLAIM_USER_ID, createdUser.id)
+                                .withClaim(CLAIM_USER_ID, user.id)
                                 .sign(jwtAlgorithm)
-                        AuthResult(refreshToken, sessionToken, createdUser)
+                        AuthResult(refreshToken.refreshToken, sessionToken, user)
                     } else {
-                        respondError = { call.respond(HttpStatusCode.Conflict, "User already exists") }
                         null
                     }
-                } else {
-                    respondError = { call.respond(HttpStatusCode.BadRequest, "Invalid Proof of Work Solution") }
-                    null
-                }
-            }?.let { authResult -> call.respond(HttpStatusCode.Created, authResult) } ?: respondError()
-        }
-        post(Endpoints.tokenRefresh()) {
-            receiveArgs(it) { refreshToken ->
-                val jwt = jwtVerifier.verify(refreshToken.refreshToken)
-                val userId = jwt.getClaim(CLAIM_USER_ID).asLong()
-                val user = getUser(userId)
-                if (user != null) {
-                    val sessionToken =
-                        JWT
-                            .create()
-                            .withAudience(audience)
-                            .withIssuer(issuer)
-                            .withClaim(CLAIM_USER_ID, user.id)
-                            .sign(jwtAlgorithm)
-                    AuthResult(refreshToken.refreshToken, sessionToken, user)
-                } else {
-                    null
-                }
-            }?.let { call.respond(HttpStatusCode.Created, it) } ?: call.respond(
-                HttpStatusCode.NotFound,
-                "User Not Found",
-            )
-        }
+                }?.let { call.respond(HttpStatusCode.Created, it) } ?: call.respond(
+                    HttpStatusCode.NotFound,
+                    "User Not Found",
+                )
+            }
 
-        authenticate("auth-jwt") {
-            postWithAuth(Endpoints.updateNick()) { (endpoint, userId) ->
-                receiveArgs(endpoint) { request: UpdateNickRequest ->
-                    transaction {
-                        Users.update({ Users.id eq userId }) {
-                            it[nick] = request.nick
-                        } > 0
-                    }
-                }?.let { success -> call.respond(HttpStatusCode.OK, success) }
-                    ?: call.respond(HttpStatusCode.BadRequest, "Invalid request")
+            authenticate("auth-jwt") {
+                postWithAuth(Endpoints.updateNick()) { (endpoint, userId) ->
+                    receiveArgs(endpoint) { request: UpdateNickRequest ->
+                        transaction {
+                            Users.update({ Users.id eq userId }) {
+                                it[nick] = request.nick
+                            } > 0
+                        }
+                    }?.let { success -> call.respond(HttpStatusCode.OK, success) }
+                        ?: call.respond(HttpStatusCode.BadRequest, "Invalid request")
+                }
             }
         }
         webSocket("/game") {
