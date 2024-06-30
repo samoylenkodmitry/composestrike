@@ -16,7 +16,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 class Game {
-    fun launchGame() = CoroutineScope(Dispatchers.Default).launch {
+    private fun launchGame() = CoroutineScope(Dispatchers.Default).launch {
         println("Game loop started")
         while (isActive && players.isNotEmpty()) {
             updatePlayers()
@@ -37,9 +37,9 @@ class Game {
         }
     }
 
+    private val players = mutableMapOf<String, Player>()
     private var gameLoopJob = launchGame()
 
-    private val players = mutableMapOf<String, Player>()
     val gameState: GameState
         get() = GameState(players, bullets)
     private val bullets = mutableMapOf<String, Bullet>()
