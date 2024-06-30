@@ -23,30 +23,34 @@ fun App() {
         val screenState = Navigator.screenFlow.collectAsState(Screen.Main)
         val scope = rememberCoroutineScope()
         LaunchedEffect(Unit) {
-            scope.launch {
-                ViewModel.checkAuth()
-            }
-            scope.launch {
-                AppGraph.auth.collect { authState ->
-                    when (authState) {
-                        is AuthState.Authenticated -> {
-                            AppGraph.notifications.tryEmit(Notification.Info("Hello!"))
-                            Navigator.main()
-                        }
+            if (AUTH_ENABLED) {
+                scope.launch {
+                    ViewModel.checkAuth()
+                }
+                scope.launch {
+                    AppGraph.auth.collect { authState ->
+                        when (authState) {
+                            is AuthState.Authenticated -> {
+                                AppGraph.notifications.tryEmit(Notification.Info("Hello!"))
+                                Navigator.main()
+                            }
 
-                        AuthState.AuthError -> {
-                            Navigator.error("Could not authenticate")
-                        }
+                            AuthState.AuthError -> {
+                                Navigator.error("Could not authenticate")
+                            }
 
-                        AuthState.Authenticating -> {
-                            Navigator.splash()
-                        }
+                            AuthState.Authenticating -> {
+                                Navigator.splash()
+                            }
 
-                        AuthState.Unauthenticated -> {
-                            Navigator.splash()
+                            AuthState.Unauthenticated -> {
+                                Navigator.splash()
+                            }
                         }
                     }
                 }
+            } else {
+                Navigator.main()
             }
         }
 

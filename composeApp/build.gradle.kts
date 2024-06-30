@@ -114,7 +114,7 @@ kotlin {
 }
 
 android {
-    namespace = "in.shrtl.app"
+    namespace = "compose.strike.app"
     compileSdk =
         libs.versions.android.compileSdk
             .get()
@@ -125,7 +125,7 @@ android {
     sourceSets["main"].resources.srcDirs("src/commonMain/resources")
 
     defaultConfig {
-        applicationId = "in.shrtl.app"
+        applicationId = "compose.strike.app"
         minSdk =
             libs.versions.android.minSdk
                 .get()
@@ -164,7 +164,7 @@ compose.desktop {
         }
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "in.shrtl.app"
+            packageName = "compose.strike.app"
             packageVersion = "1.0.0"
         }
     }

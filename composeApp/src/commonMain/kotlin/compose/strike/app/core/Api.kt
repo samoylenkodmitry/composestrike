@@ -9,7 +9,7 @@ import ProofOfWork
 import RefreshTokenRequest
 import UpdateNickRequest
 import compose.strike.app.core.data.AuthState
-import hostUrl
+import backendPublicUrl
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
@@ -35,12 +35,12 @@ object Api {
     private val authClient =
         HttpClient {
             install(ContentNegotiation) { json(jsonInstance) }
-            defaultRequest { url(hostUrl) }
+            defaultRequest { url(backendPublicUrl) }
         }
     private val requestsClient =
         HttpClient {
             install(ContentNegotiation) { json(jsonInstance) }
-            defaultRequest { url(hostUrl) }
+            defaultRequest { url(backendPublicUrl) }
             install(Auth) {
                 bearer {
                     loadTokens {

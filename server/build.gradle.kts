@@ -7,7 +7,7 @@ plugins {
 group = "compose.strike.app"
 version = "1.0.0"
 application {
-    mainClass.set("in.shrtl.app.ApplicationKt")
+    mainClass.set("compose.strike.app.ApplicationKt")
     applicationDefaultJvmArgs = listOf("-Dio.ktor.development=${extra["io.ktor.development"] ?: "false"}")
 }
 ktor {

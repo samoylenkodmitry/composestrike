@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
 import compose.strike.app.core.AppGraph
 import compose.strike.app.core.Navigator
 import compose.strike.app.core.data.Notification
-import hostName
+import backendPublicHost
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.http.*
@@ -49,7 +49,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.sin
 
 @OptIn(DelicateCoroutinesApi::class)
@@ -68,7 +67,7 @@ fun GameScreen() {
 
         LaunchedEffect(Unit) {
             try {
-                client.webSocket(method = HttpMethod.Get, host = hostName, port = SERVER_PORT, path = "/game") {
+                client.webSocket(method = HttpMethod.Get, host = backendPublicHost, port = SERVER_PORT, path = "/game") {
                     socketSession = this
                     val playerIdFrame = incoming.receive()
                     if (playerIdFrame is Frame.Text) {
@@ -179,7 +178,10 @@ fun GameScreen() {
                         )
                         // Draw health bar
                         drawArc(
-                            brush = Brush.sweepGradient(listOf(Color.Red, Color.Green), center = Offset(player.x, player.y)),
+                            brush = Brush.sweepGradient(
+                                listOf(Color.Red, Color.Green),
+                                center = Offset(player.x, player.y)
+                            ),
                             startAngle = 0f,
                             sweepAngle = 360f * (player.health / 100f),
                             useCenter = false,
@@ -200,7 +202,7 @@ fun GameScreen() {
                             end = Offset(gunEndX, gunEndY),
                             strokeWidth = 6f
                         )
-                        
+
                         translate(player.x, player.y - 60f) {
                             // draw level
                             drawText(
@@ -229,7 +231,7 @@ fun GameScreen() {
                         center = Offset(player.x / (RANGE / 100), player.y / (RANGE / 100))
                     )
                 }
-                
+
             }
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

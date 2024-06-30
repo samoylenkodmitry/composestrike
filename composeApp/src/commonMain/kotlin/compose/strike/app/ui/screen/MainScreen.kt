@@ -1,5 +1,6 @@
 package compose.strike.app.ui.screen
 
+import AUTH_ENABLED
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,20 +35,22 @@ fun MainScreen() {
             modifier =
             Modifier.haze(state = hazeState).fillMaxSize().shaderBackground(BLACK_CHERRY_COSMOS_2_PLUS_EFFECT, 0.009f),
         )
-        ButtonUser(
-            Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 20.dp, end = 20.dp)
-                .hazeChild(
-                    state = hazeState,
-                    shape = CircleShape,
-                    style =
-                    HazeStyle(
-                        blurRadius = 16.dp,
-                        tint = Color.White.copy(alpha = 0.4f),
+        if (AUTH_ENABLED) {
+            ButtonUser(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 20.dp, end = 20.dp)
+                    .hazeChild(
+                        state = hazeState,
+                        shape = CircleShape,
+                        style =
+                        HazeStyle(
+                            blurRadius = 16.dp,
+                            tint = Color.White.copy(alpha = 0.4f),
+                        ),
                     ),
-                ),
-        )
+            )
+        }
         Column(
             modifier =
             Modifier
