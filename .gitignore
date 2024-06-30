@@ -1,0 +1,50 @@
+*.iml
+.gradle
+**/build/
+xcuserdata
+!src/**/build/
+local.properties
+.idea
+.DS_Store
+captures
+.externalNativeBuild
+.cxx
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+**/xcshareddata/WorkspaceSettings.xcsettings
+!/ktor.pk8
+*.kotlin/*
+.kotlin/
+metadata/
+sessions/
+
+# Ignore database credential files
+db_username.txt
+db_password.txt
+
+# Ignore RSA private key
+server/ktor.pk8
+
+# Ignore .env file
+.env
+
+# For the deployment
+db_username.txt
+db_password.txt
+
+!/kotlin-js-store/yarn.lock
+!/all.md
+certs/
+nginx/
+frontend-web.zip
+server-1.0.0.jar
+ktor.key
+ktor.pub
+wget-log
+all.md
+deploy.sh.bak
+backups/
+deploy.log

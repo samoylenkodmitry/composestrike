@@ -1,0 +1,59 @@
+services:
+  
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER_FILE: /run/secrets/db_username
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: strike
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    secrets:
+      - db_username
+      - db_password
+    networks:
+      - app-tier
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: dockers/backend/Dockerfile
+    container_name: backend
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      - DOMAIN=$DOMAIN
+      - VIRTUAL_HOST=$DOMAIN
+      - DATABASE_URL=$DATABASE_URL
+      - DATABASE_USER_FILE=/run/secrets/db_username
+      - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+      - LETSENCRYPT_HOST=$DOMAIN
+      - LETSENCRYPT_EMAIL=$LETSENCRYPT_EMAIL
+      - VIRTUAL_PATH=~^/(?!(index\.html|delegate\.js|js/composeApp\.js|js/composeApp\.js\.LICENSE\.txt|js/composeApp\.js\.map|js/composeResources/composestrike\.composeapp\.generated\.resources/drawable/compose-multiplatform\.xml|js/index\.html|js/META-INF/MANIFEST\.MF|js/skiko\.js|js/skiko\.mjs|js/skiko\.wasm|wasmJs/8433c6b69bfa201b0895\.wasm|wasmJs/composeApp\.js|wasmJs/composeApp\.js\.LICENSE\.txt|wasmJs/composeApp\.js\.map|wasmJs/composeApp\.wasm|wasmJs/composeResources/composestrike\.composeapp\.generated\.resources/drawable/compose-multiplatform\.xml|wasmJs/index\.html|wasmJs/META-INF/MANIFEST\.MF|wasmJs/skiko\.js|wasmJs/skiko\.mjs|wasmJs/skiko\.wasm)).+$
+
+    volumes:
+      - ../../server/ktor.pk8:/run/secrets/ktor_pk8:ro
+      - ../../server/certs/jwks.json:/run/secrets/certs/jwks.json:ro
+    secrets:
+      - db_username
+      - db_password
+    networks:
+      - app-tier
+      - proxy-tier
+
+networks:
+  app-tier:
+  proxy-tier:
+    external: true
+
+volumes:
+  postgres_data:
+
+secrets:
+  db_username:
+    file: ../../db_username.txt
+  db_password:
+    file: ../../db_password.txt

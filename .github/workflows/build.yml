@@ -1,0 +1,135 @@
+name: Build and Create Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: build-${{ matrix.os }}-${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: webwasm
+            artifact_name: frontend-web-wasm
+            package_task: wasmJsBrowserDistribution
+          - os: ubuntu-latest
+            target: webjs
+            artifact_name: frontend-web-js
+            package_task: jsBrowserDistribution
+          - os: ubuntu-latest
+            target: deb
+            artifact_name: frontend-linux-x64
+            package_task: packageDeb
+          - os: macos-latest
+            target: dmg
+            artifact_name: frontend-macos-x64
+            package_task: packageDmg
+          - os: windows-latest
+            target: msi
+            artifact_name: frontend-windows-x64
+            package_task: packageMsi
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build Frontend
+        run: ./gradlew :composeApp:${{ matrix.package_task }}
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            if [ "${{ matrix.target }}" == "webwasm" ]; then
+              composeApp/build/dist/wasmJs/productionExecutable
+            else if [ "${{ matrix.target }}" == "webjs" ]; then
+              composeApp/build/dist/js/productionExecutable
+            else
+              composeApp/build/compose/binaries/main/${{ matrix.target }} 
+            fi
+
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Build Backend
+        run: ./gradlew :server:buildFatJar
+      - uses: actions/upload-artifact@v3
+        with:
+          name: backend-artifact
+          path: server/build/libs/
+
+  create-release:
+    needs: [ build, build-backend ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          name: frontend-web-wasm
+          path: frontend-web-wasm
+      
+      - uses: actions/download-artifact@v3
+        with:
+          name: frontend-web-js
+          path: frontend-web-js
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: frontend-linux-x64
+          path: frontend-linux-x64
+        continue-on-error: true
+      - uses: actions/download-artifact@v3
+        with:
+          name: frontend-macos-x64
+          path: frontend-macos-x64
+        continue-on-error: true
+      - uses: actions/download-artifact@v3
+        with:
+          name: frontend-windows-x64
+          path: frontend-windows-x64
+        continue-on-error: true
+      - uses: actions/download-artifact@v3
+        with:
+          name: backend-artifact
+          path: backend-artifact
+        continue-on-error: true
+        
+      - name: Archive WASM & JS Build
+        run: zip -r frontend-web.zip frontend-web-wasm frontend-web-js
+      
+      - name: List Files
+        run: |
+          ls -lisa
+          echo "Files in frontend-linux-x64:"
+         
+      - name: Print Detailed File Tree
+        run: |
+          echo "Detailed File Tree for frontend-linux-x64:"
+          find
+
+      - uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          files: |
+            frontend-linux-x64/composeApp/build/compose/binaries/main/deb/*
+            frontend-windows-x64/composeApp/build/compose/binaries/main/msi/*
+            frontend-macos-x64/composeApp/build/compose/binaries/main/dmg/*
+            backend-artifact/*
+            frontend-web.zip
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
