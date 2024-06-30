@@ -67,7 +67,7 @@ fun GameScreen() {
 
         LaunchedEffect(Unit) {
             try {
-                client.webSocket(method = HttpMethod.Get, host = backendPublicHost, port = SERVER_PORT, path = "/game") {
+                client.wss(method = HttpMethod.Get, host = backendPublicHost, port = SERVER_PORT, path = "/game") {
                     socketSession = this
                     val playerIdFrame = incoming.receive()
                     if (playerIdFrame is Frame.Text) {
