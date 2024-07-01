@@ -1,5 +1,7 @@
 # Compose-Strike
 
+https://strike.dmitrysamoylenko.in
+
 ## About
 
 ![Screenshot](screenshot.webp)
