@@ -1,3 +1,9 @@
+[![Build and Create Release](https://github.com/samoylenkodmitry/composestrike/actions/workflows/build.yml/badge.svg)](https://shrtl.in/l2)
+[![GitHub Release](https://img.shields.io/github/v/release/samoylenkodmitry/composestrike?include_prereleases)](https://shrtl.in/m2)
+[![GitHub License](https://img.shields.io/github/license/samoylenkodmitry/composestrike)](https://shrtl.in/n2)
+[![GitHub top language](https://img.shields.io/github/languages/top/samoylenkodmitry/composestrike)](https://shrtl.in/o2)
+
+
 # Compose-Strike
 
 https://strike.dmitrysamoylenko.in
