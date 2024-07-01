@@ -5,6 +5,7 @@ https://strike.dmitrysamoylenko.in
 ## About
 
 ![Screenshot](screenshot.webp)
+![Gif](composestrike.gif)
 Multiplayer game where players can fight against each other.
 Powered by Compose Multiplatform and Ktor.
 
