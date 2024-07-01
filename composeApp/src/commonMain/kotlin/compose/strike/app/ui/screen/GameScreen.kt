@@ -7,6 +7,7 @@ import GameState
 import Player
 import RANGE
 import SERVER_PORT
+import WSS_PORT
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -67,7 +68,7 @@ fun GameScreen() {
 
         LaunchedEffect(Unit) {
             try {
-                client.wss(method = HttpMethod.Get, host = backendPublicHost, port = SERVER_PORT, path = "/game") {
+                client.wss(method = HttpMethod.Get, host = backendPublicHost, port = WSS_PORT, path = "/game") {
                     socketSession = this
                     val playerIdFrame = incoming.receive()
                     if (playerIdFrame is Frame.Text) {

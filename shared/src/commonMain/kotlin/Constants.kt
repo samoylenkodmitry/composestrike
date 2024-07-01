@@ -9,6 +9,7 @@ val hostDebug = "0.0.0.0"
 val hostRelease = "backend.dmitrysamoylenko.in"
 val hostName = if (IS_LOCALHOST) hostDebug else hostRelease
 val backendPublicHost = if (FRONT_TALK_TO_LOCALHOST) hostDebug else hostRelease
+val WSS_PORT = if (FRONT_TALK_TO_LOCALHOST) 8080 else 443
 val backendPublicUrl = if (IS_LOCALHOST) "http://$hostName:$SERVER_PORT" else "https://$hostName"
 const val AUTH_ENABLED = false
 const val FULL_ICON =
