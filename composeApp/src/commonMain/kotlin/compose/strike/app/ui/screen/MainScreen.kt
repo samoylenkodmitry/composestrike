@@ -20,6 +20,7 @@ import compose.strike.app.util.haze
 import compose.strike.app.util.hazeChild
 import compose.strike.app.util.rememberHaze
 import compose.strike.app.util.shader.BLACK_CHERRY_COSMOS_2_PLUS_EFFECT
+import compose.strike.app.util.shader.explosionShader
 import compose.strike.app.util.shader.shaderBackground
 
 @Suppress("ktlint:standard:function-naming")

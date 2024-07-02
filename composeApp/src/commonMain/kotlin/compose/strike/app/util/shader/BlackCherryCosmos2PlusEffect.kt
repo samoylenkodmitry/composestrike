@@ -156,7 +156,11 @@ vec4 main( vec2 fragCoord ) {
 
 	backCol2.bg = mix(backCol2.gb, backCol2.bg, 0.5*(cos(time*0.01) + 1.0));
 	
-	return forCol2 + vec4(backCol2, 1.0);
+	vec4 o =  forCol2 + vec4(backCol2, 1.0);
+    if (o.r < .5 && o.g < .5 && o.b < .5) {
+        o.a = 0.0;
+    }
+    return o;
 }
 
 """

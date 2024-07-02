@@ -1,7 +1,9 @@
 package compose.strike.app
 
+import BULLET_RANGE
 import Bullet
 import GameState
+import HitEffect
 import Player
 import RANGE
 import io.ktor.server.websocket.*
@@ -12,6 +14,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import speed
+import update
+import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -21,6 +25,7 @@ class Game {
         while (isActive && players.isNotEmpty()) {
             updatePlayers()
             updateBullets()
+            updateExplosions()
             checkBulletCollisions()
             broadcastGameState()
             delay(16) // Roughly 60 updates per second
@@ -41,8 +46,9 @@ class Game {
     private var gameLoopJob = launchGame()
 
     val gameState: GameState
-        get() = GameState(players, bullets)
+        get() = GameState(players, bullets, explosions)
     private val bullets = mutableMapOf<String, Bullet>()
+    private val explosions = mutableListOf<HitEffect>()
     private var lastBulletId = 0
     private val mutex = Mutex()
 
@@ -73,6 +79,8 @@ class Game {
                     bulletId,
                     player.x,
                     player.y,
+                    player.x,
+                    player.y,
                     player.angle,
                     playerId,
                     player.level
@@ -87,8 +95,17 @@ class Game {
             for (bullet in bullets.values) {
                 bullet.x += bullet.speed * cos(bullet.angle)
                 bullet.y += bullet.speed * sin(bullet.angle)
+                if ((bullet.x - bullet.xStart).absoluteValue > BULLET_RANGE ||
+                    (bullet.y - bullet.yStart).absoluteValue > BULLET_RANGE
+                ) {
+                    explosions.add(HitEffect(bullet.x, bullet.y, 1f, type = 1 ))
+                }
             }
-            bullets.entries.removeAll { it.value.x < 0 || it.value.x > RANGE || it.value.y < 0 || it.value.y > RANGE }
+            bullets.entries.removeAll {
+                it.value.x < 0 || it.value.x > RANGE || it.value.y < 0 || it.value.y > RANGE ||
+                        (it.value.x - it.value.xStart).absoluteValue > BULLET_RANGE + (it.value.level - 1) * 20 ||
+                        (it.value.y - it.value.yStart).absoluteValue > BULLET_RANGE + (it.value.level - 1) * 20
+            }
         }
     }
 
@@ -99,9 +116,11 @@ class Game {
                 for (player in players.values) {
                     if (player.id != bullet.playerId && distance(bullet.x, bullet.y, player.x, player.y) < 20) {
                         player.health -= 10 // Bullet damage
+                        explosions.add(HitEffect(bullet.x, bullet.y, 1f, type = 1))
                         bulletsToRemove.add(bullet.id)
 
                         if (player.health <= 0) {
+                            explosions.add(HitEffect(player.x, player.y, 2f, type = 2))
                             // Player is dead, respawn
                             player.respawn()
                             players[bullet.playerId]?.levelUp() // Level up the player who shot the bullet
@@ -123,7 +142,11 @@ class Game {
             for ((_, player) in players) {
                 player.connection?.let {
                     it.coroutineScope.launch {
-                        it.session?.outgoing?.send(Frame.Text(gameStateJson))
+                        try {
+                            it.session?.outgoing?.send(Frame.Text(gameStateJson))
+                        } catch (e: Exception) {
+                            println("Error sending game state to player ${player.id}: ${e.message}")
+                        }
                     }
                 }
             }
@@ -150,6 +173,13 @@ class Game {
             players[playerId]?.let {
                 it.angle = angle
             }
+        }
+    }
+
+    suspend fun updateExplosions() {
+        mutex.withLock {
+            explosions.forEach { it.update() }
+            explosions.removeAll { it.scale <= 0f }
         }
     }
 }

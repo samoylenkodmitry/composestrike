@@ -43,7 +43,8 @@ data class UpdateNickRequest(
 @Serializable
 data class GameState(
     val players: Map<String, Player> = emptyMap(),
-    val bullets: Map<String, Bullet> = emptyMap()
+    val bullets: Map<String, Bullet> = emptyMap(),
+    val explosions: List<HitEffect> = emptyList(),
 )
 
 @Serializable
@@ -61,6 +62,8 @@ data class Player(
 @Serializable
 data class Bullet(
     val id: String,
+    val xStart: Float,
+    val yStart: Float,
     var x: Float,
     var y: Float,
     val angle: Float,
@@ -74,4 +77,18 @@ val Bullet.speed
 val Player.speed
     get() = max(10, 25 - level) * 0.1f
 
+@Serializable
+data class HitEffect(
+    val x: Float,
+    val y: Float,
+    var scale: Float,
+    var progress: Float = 0f,
+    val type: Int
+)
+
+fun HitEffect.update() {
+    scale -= 0.01f
+    progress += 0.1f
+}
 const val RANGE = 3000
+const val BULLET_RANGE = 500

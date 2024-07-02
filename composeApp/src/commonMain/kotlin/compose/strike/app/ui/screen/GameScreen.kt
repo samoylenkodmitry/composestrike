@@ -3,7 +3,9 @@
 package compose.strike.app.ui.screen
 
 import Bullet
+import FRONT_TALK_TO_LOCALHOST
 import GameState
+import HitEffect
 import Player
 import RANGE
 import SERVER_PORT
@@ -28,9 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
@@ -40,7 +44,10 @@ import androidx.compose.ui.unit.dp
 import compose.strike.app.core.AppGraph
 import compose.strike.app.core.Navigator
 import compose.strike.app.core.data.Notification
+import compose.strike.app.util.shader.ExplosionShader
 import backendPublicHost
+import compose.strike.app.util.shader.BLACK_CHERRY_COSMOS_2_PLUS_EFFECT
+import compose.strike.app.util.shader.explosionShader
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.http.*
@@ -49,6 +56,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlin.math.atan2
+import kotlin.math.min
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -65,10 +73,12 @@ fun GameScreen() {
         var connectedToServer by remember { mutableStateOf(false) }
         var nextFrame by remember { mutableStateOf(0L) }
         var socketSession by remember { mutableStateOf<DefaultClientWebSocketSession?>(null) }
+        val explosionShader = remember { ExplosionShader(explosionShader) }
+        val playerExplosionShader = remember { ExplosionShader(BLACK_CHERRY_COSMOS_2_PLUS_EFFECT) }
 
         LaunchedEffect(Unit) {
             try {
-                client.wss(method = HttpMethod.Get, host = backendPublicHost, port = WSS_PORT, path = "/game") {
+                val block: suspend DefaultClientWebSocketSession.() -> Unit = {
                     socketSession = this
                     val playerIdFrame = incoming.receive()
                     if (playerIdFrame is Frame.Text) {
@@ -106,6 +116,23 @@ fun GameScreen() {
                             connectedToServer = false
                         }
                     }
+                }
+                if (FRONT_TALK_TO_LOCALHOST) {
+                    client.webSocket(
+                        method = HttpMethod.Get,
+                        host = backendPublicHost,
+                        port = WSS_PORT,
+                        path = "/game",
+                        block = block
+                    )
+                } else {
+                    client.wss(
+                        method = HttpMethod.Get,
+                        host = backendPublicHost,
+                        port = WSS_PORT,
+                        path = "/game",
+                        block = block
+                    )
                 }
             } catch (e: Exception) {
                 Notification.Error("Error connecting to server: ${e.message}")
@@ -162,6 +189,7 @@ fun GameScreen() {
                 }
             ) {
                 nextFrame // Trigger recomposition
+                
 
                 // Keep the player at the center of the screen
                 val offsetX = size.width / 2 - player.x
@@ -169,6 +197,13 @@ fun GameScreen() {
                 translate(offsetX, offsetY) {
                     // Drawing the background
                     drawRect(Color.White, size = Size(RANGE * 1f, RANGE * 1f))
+                    // Draw floor grid lines
+                    val gridSize = 100
+                    val gridColor = Color.Gray
+                    for (i in 0 until RANGE step gridSize) {
+                        drawLine(color = gridColor, Offset(i * 1f, 0f), Offset(i * 1f, RANGE * 1f), strokeWidth = 1f)
+                        drawLine(color = gridColor, Offset(0f, i * 1f), Offset(RANGE * 1f, i * 1f), strokeWidth = 1f)
+                    }
 
                     // Drawing players
                     gameState.players.values.forEach { player ->
@@ -221,6 +256,18 @@ fun GameScreen() {
                             center = Offset(bullet.x, bullet.y)
                         )
                     }
+
+                    // Drawing explosions
+                    gameState.explosions.forEach { explosion ->
+                        translate(explosion.x - 50f, explosion.y - 50f) {
+                            val shader = if (explosion.type == 1) explosionShader else playerExplosionShader
+                            drawRect(
+                                shader.drawRectShader(explosion.progress * 0.08f, 100f, 100f),
+                                topLeft = Offset.Zero,
+                                size = Size(100f, 100f),
+                            )
+                        }
+                    }
                 }
                 // minimap
                 drawRect(Color.Black, size = Size(100f, 100f))
@@ -253,3 +300,6 @@ val bulletColors = mutableMapOf<Int, Color>()
 fun Bullet.color() = bulletColors.getOrPut(level) {
     Color.hsv(((level * 30) % 360).toFloat(), 0.8f, 0.8f)
 }
+
+val gameMutex = kotlinx.coroutines.sync.Mutex()
+
