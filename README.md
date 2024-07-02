@@ -15,8 +15,8 @@ https://strike.dmitrysamoylenko.in
 | yes | yes | yes | yes | yes | yes | yes |
 ---
 
-![Screenshot](screenshot.webp)
 ![Gif](composestrike.gif)
+
 Multiplayer game where players can fight against each other.
 Powered by Compose Multiplatform and Ktor.
 
