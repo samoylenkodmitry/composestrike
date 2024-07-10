@@ -1,11 +1,17 @@
 package compose.strike.app
 
 import BULLET_RANGE
+import Box
 import Bullet
+import Flag
 import GameState
 import HitEffect
 import Player
+import Point
 import RANGE
+import Size
+import Team
+import bases
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
@@ -15,11 +21,24 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import speed
 import update
+import java.util.*
+import kotlin.math.abs
 import kotlin.math.absoluteValue
 import kotlin.math.cos
 import kotlin.math.sin
 
 class Game {
+
+    private fun generateRandomBoxes() = List(10 * RANGE / 140) {
+        Box(
+            id = it,
+            position = Point((0..RANGE).random() * 1f, (0..RANGE).random() * 1f),
+            size = Size((50..140).random().toFloat(), (50..140).random().toFloat())
+        )
+    }.filter { box ->
+        !bases.values.any { base -> abs(box.position.x - base.x) < 100 && abs(box.position.y - base.y) < 100 }
+    }
+
     private fun launchGame() = CoroutineScope(Dispatchers.Default).launch {
         println("Game loop started")
         while (isActive && players.isNotEmpty()) {
@@ -27,39 +46,77 @@ class Game {
             updateBullets()
             updateExplosions()
             checkBulletCollisions()
+            updateFlags()
             broadcastGameState()
             delay(16) // Roughly 60 updates per second
         }
         println("Game loop stopped")
     }
 
+    private val gameWorld = GameWorld(RANGE * 1f, RANGE * 1f, generateRandomBoxes())
+
+    class GameWorld(val width: Float, val height: Float, val boxes: List<Box>) {
+
+        fun collidesWithBox(obj: Any, newPosition: Point) =
+            boxes.any { box -> collides(obj, newPosition, box) }
+
+        private fun collides(obj: Any, newPosition: Point, box: Box) = when (obj) {
+            is Player -> newPosition.x + 20 > box.position.x && newPosition.x - 20 < box.position.x + box.size.width &&
+                    newPosition.y + 20 > box.position.y && newPosition.y - 20 < box.position.y + box.size.height
+
+            is Bullet -> newPosition.x + 8 > box.position.x && newPosition.x - 8 < box.position.x + box.size.width &&
+                    newPosition.y + 8 > box.position.y && newPosition.y - 8 < box.position.y + box.size.height
+
+            else -> false
+        }
+
+        fun collidesWithWall(newPosition: Point) =
+            newPosition.x < 0 || newPosition.x > width || newPosition.y < 0 || newPosition.y > height
+
+    }
+
     private fun updatePlayers() {
-        with(players) {
-            forEach { (_, player) ->
-                player.x += player.dx * player.speed
-                player.y += player.dy * player.speed
+        for ((_, player) in players) {
+            val newPosition = Point(
+                player.x + player.dx * player.speed,
+                player.y + player.dy * player.speed
+            )
+            if (!gameWorld.collidesWithBox(player, newPosition) && !gameWorld.collidesWithWall(newPosition)) {
+                player.x = newPosition.x
+                player.y = newPosition.y
             }
         }
     }
 
     private val players = mutableMapOf<String, Player>()
+
     private var gameLoopJob = launchGame()
 
-    val gameState: GameState
-        get() = GameState(players, bullets, explosions)
+    val gameState: GameState get() = GameState(players, bullets, explosions, gameWorld.boxes, flags, scores)
+
     private val bullets = mutableMapOf<String, Bullet>()
+    private val flags = listOf(
+        Flag(0, bases[Team.RED]!!.x, bases[Team.RED]!!.y, Team.RED),
+        Flag(1, bases[Team.BLUE]!!.x, bases[Team.BLUE]!!.y, Team.BLUE)
+    )
     private val explosions = mutableListOf<HitEffect>()
+    private val scores = mutableMapOf<Team, Int>()
     private var lastBulletId = 0
     private val mutex = Mutex()
 
     suspend fun addPlayer(player: Player) {
+        println("adding... ${player.id}")
         mutex.withLock {
             players[player.id] = player
+            println("Player added: ${player.id}")
             if (players.size > 0 && !gameLoopJob.isActive) {
+                println("starting game loop...")
                 gameLoopJob = launchGame()
                 gameLoopJob.start()
+                println("started")
             }
         }
+        println("finish Player added: ${player.id}")
     }
 
     suspend fun removePlayer(playerId: String) {
@@ -93,12 +150,17 @@ class Game {
     suspend private fun updateBullets() {
         mutex.withLock {
             for (bullet in bullets.values) {
-                bullet.x += bullet.speed * cos(bullet.angle)
-                bullet.y += bullet.speed * sin(bullet.angle)
-                if ((bullet.x - bullet.xStart).absoluteValue > BULLET_RANGE ||
+                val newPosition = Point(
+                    bullet.x + bullet.speed * cos(bullet.angle),
+                    bullet.y + bullet.speed * sin(bullet.angle)
+                )
+                if (!gameWorld.collidesWithBox(bullet, newPosition)) {
+                    bullet.x = newPosition.x
+                    bullet.y = newPosition.y
+                } else if ((bullet.x - bullet.xStart).absoluteValue > BULLET_RANGE ||
                     (bullet.y - bullet.yStart).absoluteValue > BULLET_RANGE
                 ) {
-                    explosions.add(HitEffect(bullet.x, bullet.y, 1f, type = 1 ))
+                    explosions.add(HitEffect(bullet.x, bullet.y, 1f, type = 1))
                 }
             }
             bullets.entries.removeAll {
@@ -132,9 +194,55 @@ class Game {
         }
     }
 
-    private fun distance(x1: Float, y1: Float, x2: Float, y2: Float): Float {
-        return kotlin.math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
+    private suspend fun updateFlags() {
+        mutex.withLock {
+            for (flag in flags) {
+                val flagBase = bases[flag.team]!!
+                for (player in players.values) {
+
+                    if (flag.holderId == null)
+                        if (flag.team != player.team || flagBase.x != flag.x || flagBase.y != flag.y)
+                            if (distance(player.x, player.y, flag.x, flag.y) < 20)
+                                flag.holderId = player.id
+
+                    if (flag.holderId == player.id) {
+                        // move flag with player
+                        flag.x = player.x
+                        flag.y = player.y
+
+                        // Check if the flag was delivered
+                        val playerBase = bases[player.team]!!
+                        if (distance(flag.x, flag.y, playerBase.x, playerBase.y) < 20) {
+                            // Flag was delivered
+                            flag.holderId = null
+                            flag.x = flagBase.x
+                            flag.y = flagBase.y
+
+                            if (flag.team != player.team) {
+                                scores[player.team] = 1 + (scores[player.team] ?: 0)
+                                resetFlags()
+                                players.values.forEach { it.respawn() }
+                                // add explosion effect on the losing team flag
+                                explosions.add(HitEffect(flag.x, flag.y, 2f, type = 2))
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    private fun resetFlags() {
+        for (flag in flags) {
+            flag.holderId = null
+            val flagBase = bases[flag.team]!!
+            flag.x = flagBase.x
+            flag.y = flagBase.y
+        }
+    }
+
+    private fun distance(x1: Float, y1: Float, x2: Float, y2: Float): Float =
+        kotlin.math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
 
     private suspend fun broadcastGameState() {
         mutex.withLock {
@@ -182,6 +290,23 @@ class Game {
             explosions.removeAll { it.scale <= 0f }
         }
     }
+
+    suspend fun nextTeam(): Team =
+        mutex.withLock {
+            val teamCounts = players.values.groupingBy { it.team }.eachCount()
+            if (teamCounts.getOrDefault(Team.RED, 0) > teamCounts.getOrDefault(
+                    Team.BLUE,
+                    0
+                )
+            ) Team.BLUE else Team.RED
+        }
+
+    suspend fun createPlayer() =
+        Player(UUID.randomUUID().toString(), 0f, 0f, nextTeam(), 0, 0, 0f, 1)
+            .apply {
+                respawn()
+                addPlayer(this)
+            }
 }
 
 fun Player.levelUp() {
@@ -190,8 +315,9 @@ fun Player.levelUp() {
 
 fun Player.respawn() {
     health = 100
-    x = (0..RANGE).random() * 1f
-    y = (0..RANGE).random() * 1f
+    val spawnPoint = bases[team]!!
+    x = spawnPoint.x
+    y = spawnPoint.y
 }
 
 private data class PlayerConnection(val coroutineScope: CoroutineScope, val session: DefaultWebSocketServerSession?)

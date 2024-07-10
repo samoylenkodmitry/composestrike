@@ -1,6 +1,5 @@
 import kotlinx.serialization.Serializable
 import kotlin.math.max
-
 @Serializable
 data class RefreshTokenRequest(
     val refreshToken: String,
@@ -45,6 +44,9 @@ data class GameState(
     val players: Map<String, Player> = emptyMap(),
     val bullets: Map<String, Bullet> = emptyMap(),
     val explosions: List<HitEffect> = emptyList(),
+    val boxes: List<Box> = emptyList(),
+    val flags: List<Flag> = emptyList(),
+    val scores: Map<Team, Int> = mapOf(Team.BLUE to 0, Team.RED to 0),
 )
 
 @Serializable
@@ -52,6 +54,7 @@ data class Player(
     val id: String,
     var x: Float,
     var y: Float,
+    val team: Team,
     var dx: Int = 0,
     var dy: Int = 0,
     var angle: Float,
@@ -70,7 +73,12 @@ data class Bullet(
     val playerId: String,
     val level: Int
 )
-
+@Serializable
+data class Box(
+    val id: Int,
+    val position: Point,
+    val size: Size
+)
 val Bullet.speed
     get() = max(1, 10 - level)
 
@@ -85,10 +93,31 @@ data class HitEffect(
     var progress: Float = 0f,
     val type: Int
 )
-
+@Serializable
+data class Point(val x: Float, val y: Float)
+@Serializable
+data class Size(val width: Float, val height: Float)
 fun HitEffect.update() {
     scale -= 0.01f
     progress += 0.1f
 }
 const val RANGE = 3000
 const val BULLET_RANGE = 500
+
+@Serializable
+data class Flag(
+    val id: Int,
+    var x: Float,
+    var y: Float,
+    val team: Team,
+    var holderId: String? = null,
+)
+
+enum class Team {
+    BLUE, RED
+}
+
+val bases = mapOf(
+    Team.BLUE to Point(150f, 150f),
+    Team.RED to Point(RANGE - 150f, RANGE - 150f)
+)

@@ -5,10 +5,9 @@ package compose.strike.app.ui.screen
 import Bullet
 import FRONT_TALK_TO_LOCALHOST
 import GameState
-import HitEffect
 import Player
 import RANGE
-import SERVER_PORT
+import Team
 import WSS_PORT
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -30,23 +29,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import backendPublicHost
 import compose.strike.app.core.AppGraph
 import compose.strike.app.core.Navigator
 import compose.strike.app.core.data.Notification
-import compose.strike.app.util.shader.ExplosionShader
-import backendPublicHost
 import compose.strike.app.util.shader.BLACK_CHERRY_COSMOS_2_PLUS_EFFECT
+import compose.strike.app.util.shader.ExplosionShader
 import compose.strike.app.util.shader.explosionShader
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
@@ -56,7 +54,6 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlin.math.atan2
-import kotlin.math.min
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -67,7 +64,7 @@ fun GameScreen() {
 
         var gameState by remember { mutableStateOf(GameState()) }
         var playerId by remember { mutableStateOf("") }
-        var player by remember { mutableStateOf(Player("", 0f, 0f, 0, 0, 0f, 100, 1)) }
+        var player by remember { mutableStateOf(Player("", 0f, 0f, Team.BLUE, 0, 0, 0f, 100, 1)) }
         val scope = rememberCoroutineScope()
         val client = HttpClient { install(WebSockets) }
         var connectedToServer by remember { mutableStateOf(false) }
@@ -189,7 +186,7 @@ fun GameScreen() {
                 }
             ) {
                 nextFrame // Trigger recomposition
-                
+
 
                 // Keep the player at the center of the screen
                 val offsetX = size.width / 2 - player.x
@@ -268,7 +265,25 @@ fun GameScreen() {
                             )
                         }
                     }
+                    // Drawing boxes
+                    gameState.boxes.forEach { box ->
+                        drawRect(
+                            color = Color.DarkGray,
+                            topLeft = Offset(box.position.x, box.position.y),
+                            size = Size(box.size.width, box.size.height)
+                        )
+                    }
+                    // Drawing flags
+                    gameState.flags.forEach { flag ->
+                        drawCircle(
+                            color = flag.team.color,
+                            radius = 10f,
+                            center = Offset(flag.x, flag.y)
+                        )
+                    }
                 }
+
+
                 // minimap
                 drawRect(Color.Black, size = Size(100f, 100f))
                 drawRect(Color.White, size = Size(100f, 100f), style = Stroke(2f))
@@ -279,8 +294,24 @@ fun GameScreen() {
                         center = Offset(player.x / (RANGE / 100), player.y / (RANGE / 100))
                     )
                 }
+                // game score on the center top
+                // flags
+                gameState.flags.forEach { flag ->
+                    drawCircle(
+                        color = flag.team.color,
+                        radius = 2f,
+                        center = Offset(flag.x / (RANGE / 100), flag.y / (RANGE / 100))
+                    )
+                }
 
             }
+            Text(
+                text = "Blue: ${gameState.scores[Team.BLUE] ?: 0} Red: ${gameState.scores[Team.RED] ?: 0}",
+                style = MaterialTheme.typography.h5,
+                color = Color.Black,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Connecting to server...", style = MaterialTheme.typography.h5)
@@ -296,6 +327,11 @@ fun GameScreen() {
     }
 }
 
+private val Team.color: Color
+    get() = when (this) {
+        Team.BLUE -> Color.Blue
+        Team.RED -> Color.Red
+    }
 val bulletColors = mutableMapOf<Int, Color>()
 fun Bullet.color() = bulletColors.getOrPut(level) {
     Color.hsv(((level * 30) % 360).toFloat(), 0.8f, 0.8f)

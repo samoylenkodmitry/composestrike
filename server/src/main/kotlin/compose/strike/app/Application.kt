@@ -13,9 +13,7 @@ import DIFFICULTY_PREFIX
 import EndpointWithArg
 import Endpoints
 import IS_LOCALHOST
-import Player
 import ProofOfWork
-import RANGE
 import SERVER_PORT
 import SQUARE_ICON_DATA
 import UpdateNickRequest
@@ -57,7 +55,6 @@ import java.security.spec.RSAPublicKeySpec
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.*
 
 fun main() {
     initDB()
@@ -282,13 +279,12 @@ fun Application.module() {
             }
         }
         webSocket("/game") {
-            val playerId = UUID.randomUUID().toString()
-            val player =
-                Player(playerId, (0..RANGE).random() * 1f, (0..RANGE).random() * 1f, 0, 0, 0f, 100) // Starting health
-            game.addPlayer(player)
+            println("new WebSocket connected")
+            val player = game.createPlayer()
+            println("Player $player created")
             player.setConnection(this, this)
-            println("Player $playerId connected")
-            outgoing.send(Frame.Text(playerId))
+            println("Player ${player.id} connected")
+            outgoing.send(Frame.Text(player.id))
 
             try {
                 outgoing.send(Frame.Text(Json.encodeToString(game.gameState)))
@@ -300,27 +296,27 @@ fun Application.module() {
                         when (parts[0]) {
                             "K" -> {
                                 parts[1].toIntOrNull()?.let {
-                                    game.updatePlayerKeys(playerId, it)
+                                    game.updatePlayerKeys(player.id, it)
                                 }
                             }
 
                             "A" -> {
                                 parts[1].toFloatOrNull()?.let {
-                                    game.updatePlayerAngle(playerId, it)
+                                    game.updatePlayerAngle(player.id, it)
                                 }
                             }
 
                             "F" -> {
-                                game.fireBullet(playerId)
+                                game.fireBullet(player.id)
                             }
                         }
                     }
                 }
             } catch (e: Exception) {
-                println("Player $playerId disconnected: ${e.message}")
+                println("Player ${player.id} disconnected: ${e.message}")
             } finally {
-                game.removePlayer(playerId)
-                println("Player removed $playerId ${closeReason.await()}")
+                game.removePlayer(player.id)
+                println("Player removed ${player.id} ${closeReason.await()}")
             }
         }
     }
@@ -388,6 +384,7 @@ fun validateSolution(pow: ProofOfWork) =
     pow.prefix == DIFFICULTY_PREFIX &&
             pow.solution.startsWith(pow.challenge) &&
             challengeHash(pow.solution).startsWith(pow.prefix)
+
 val usedUsersChallenges = ConcurrentSet<String>()
 
 fun addUser(
