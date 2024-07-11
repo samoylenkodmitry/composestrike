@@ -83,7 +83,7 @@ val Bullet.speed
     get() = max(1, 10 - level)
 
 val Player.speed
-    get() = max(10, 25 - level) * 0.1f
+    get() =  (25 + level) * 0.1f
 
 @Serializable
 data class HitEffect(

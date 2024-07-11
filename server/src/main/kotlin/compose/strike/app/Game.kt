@@ -41,6 +41,7 @@ class Game {
 
     private fun launchGame() = CoroutineScope(Dispatchers.Default).launch {
         println("Game loop started")
+        beginGame()
         while (isActive && players.isNotEmpty()) {
             updatePlayers()
             updateBullets()
@@ -50,12 +51,27 @@ class Game {
             broadcastGameState()
             delay(16) // Roughly 60 updates per second
         }
+        endGame()
         println("Game loop stopped")
     }
 
-    private val gameWorld = GameWorld(RANGE * 1f, RANGE * 1f, generateRandomBoxes())
+    private fun beginGame() {
+        gameWorld.boxes = generateRandomBoxes()
+        scores[Team.RED] = 0
+        scores[Team.BLUE] = 0
+    }
 
-    class GameWorld(val width: Float, val height: Float, val boxes: List<Box>) {
+    private fun endGame() {
+        gameWorld.boxes = listOf()
+        scores.clear()
+        explosions.clear()
+        bullets.clear()
+        resetFlags()
+    }
+
+    private val gameWorld = GameWorld(RANGE * 1f, RANGE * 1f, listOf())
+
+    class GameWorld(val width: Float, val height: Float, var boxes: List<Box>) {
 
         fun collidesWithBox(obj: Any, newPosition: Point) =
             boxes.any { box -> collides(obj, newPosition, box) }
@@ -89,11 +105,8 @@ class Game {
     }
 
     private val players = mutableMapOf<String, Player>()
-
     private var gameLoopJob = launchGame()
-
     val gameState: GameState get() = GameState(players, bullets, explosions, gameWorld.boxes, flags, scores)
-
     private val bullets = mutableMapOf<String, Bullet>()
     private val flags = listOf(
         Flag(0, bases[Team.RED]!!.x, bases[Team.RED]!!.y, Team.RED),
@@ -183,7 +196,9 @@ class Game {
 
                         if (player.health <= 0) {
                             explosions.add(HitEffect(player.x, player.y, 2f, type = 2))
-                            // Player is dead, respawn
+                            for (flag in flags)
+                                if (flag.holderId == player.id)
+                                    flag.holderId = null
                             player.respawn()
                             players[bullet.playerId]?.levelUp() // Level up the player who shot the bullet
                         }
