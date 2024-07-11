@@ -95,6 +95,13 @@ fun GameScreen() {
                             for (frame in incoming) {
                                 if (frame is Frame.Text) {
                                     val receivedGameState = Json.decodeFromString<GameState>(frame.readText())
+                                    if (receivedGameState.scores != gameState.scores) {
+                                        AppGraph.notifications.tryEmit(
+                                            Notification.Info(
+                                                "Blue: ${receivedGameState.scores[Team.BLUE] ?: 0} Red: ${receivedGameState.scores[Team.RED] ?: 0}"
+                                            )
+                                        )
+                                    }
                                     gameState = receivedGameState
 
                                     // Update the player's position based on the server's state
