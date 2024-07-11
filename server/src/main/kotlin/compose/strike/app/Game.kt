@@ -69,12 +69,28 @@ class Game {
         resetFlags()
     }
 
-    private val gameWorld = GameWorld(RANGE * 1f, RANGE * 1f, listOf())
+    private val gameWorld = GameWorld(RANGE * 1f, RANGE * 1f)
 
-    class GameWorld(val width: Float, val height: Float, var boxes: List<Box>) {
+    class GameWorld(val width: Float, val height: Float) {
+        val step = 200
+        var boxesByXByY = mapOf<Int, Map<Int, List<Box>>>()
+        var boxes = listOf<Box>()
+            set(value) {
+                field = value
+                boxesByXByY = value.groupBy { it.position.x.toInt() / step }.mapValues { (_, boxes) ->
+                    boxes.groupBy { it.position.y.toInt() / step }
+                }
+            }
 
-        fun collidesWithBox(obj: Any, newPosition: Point) =
-            boxes.any { box -> collides(obj, newPosition, box) }
+        fun collidesWithBoxFast(obj: Any, newPosition: Point): Boolean {
+            val cx = newPosition.x.toInt() / step
+            val cy = newPosition.y.toInt() / step
+            for (x in cx - 1..cx + 1)
+                for (y in cy - 1..cy + 1)
+                    if (boxesByXByY[cx]?.get(cy)?.any { box -> collides(obj, newPosition, box) } == true)
+                        return true
+            return false
+        }
 
         private fun collides(obj: Any, newPosition: Point, box: Box) = when (obj) {
             is Player -> newPosition.x + 20 > box.position.x && newPosition.x - 20 < box.position.x + box.size.width &&
@@ -97,7 +113,7 @@ class Game {
                 player.x + player.dx * player.speed,
                 player.y + player.dy * player.speed
             )
-            if (!gameWorld.collidesWithBox(player, newPosition) && !gameWorld.collidesWithWall(newPosition)) {
+            if (!gameWorld.collidesWithBoxFast(player, newPosition) && !gameWorld.collidesWithWall(newPosition)) {
                 player.x = newPosition.x
                 player.y = newPosition.y
             }
@@ -160,26 +176,27 @@ class Game {
         }
     }
 
-    suspend private fun updateBullets() {
+    private suspend fun updateBullets() {
         mutex.withLock {
+            val bulletsToRemove = mutableSetOf<String>()
             for (bullet in bullets.values) {
                 val newPosition = Point(
                     bullet.x + bullet.speed * cos(bullet.angle),
                     bullet.y + bullet.speed * sin(bullet.angle)
                 )
-                if (!gameWorld.collidesWithBox(bullet, newPosition)) {
+                if ((bullet.x - bullet.xStart).absoluteValue > BULLET_RANGE ||
+                    (bullet.y - bullet.yStart).absoluteValue > BULLET_RANGE
+                    || gameWorld.collidesWithBoxFast(bullet, newPosition)
+                ) {
+                    bulletsToRemove.add(bullet.id)
+                    explosions.add(HitEffect(bullet.x, bullet.y, 1f, type = 1))
+                } else {
                     bullet.x = newPosition.x
                     bullet.y = newPosition.y
-                } else if ((bullet.x - bullet.xStart).absoluteValue > BULLET_RANGE ||
-                    (bullet.y - bullet.yStart).absoluteValue > BULLET_RANGE
-                ) {
-                    explosions.add(HitEffect(bullet.x, bullet.y, 1f, type = 1))
                 }
             }
             bullets.entries.removeAll {
-                it.value.x < 0 || it.value.x > RANGE || it.value.y < 0 || it.value.y > RANGE ||
-                        (it.value.x - it.value.xStart).absoluteValue > BULLET_RANGE + (it.value.level - 1) * 20 ||
-                        (it.value.y - it.value.yStart).absoluteValue > BULLET_RANGE + (it.value.level - 1) * 20
+                it.value.id in bulletsToRemove || it.value.x < 0 || it.value.x > RANGE || it.value.y < 0 || it.value.y > RANGE
             }
         }
     }
