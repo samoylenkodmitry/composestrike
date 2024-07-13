@@ -36,7 +36,7 @@ class Game {
             size = Size((50..140).random().toFloat(), (50..140).random().toFloat())
         )
     }.filter { box ->
-        !bases.values.any { base -> abs(box.position.x - base.x) < 100 && abs(box.position.y - base.y) < 100 }
+        !bases.values.any { base -> abs(box.position.x - base.x) < 300 && abs(box.position.y - base.y) < 300 }
     }
 
     private fun launchGame() = CoroutineScope(Dispatchers.Default).launch {
@@ -74,23 +74,28 @@ class Game {
     class GameWorld(val width: Float, val height: Float) {
         val step = 200
         var boxesByXByY = mapOf<Int, Map<Int, List<Box>>>()
+        var mergedBoxesByXByY = mutableMapOf<Int, MutableMap<Int, MutableList<Box>>>()
         var boxes = listOf<Box>()
             set(value) {
                 field = value
                 boxesByXByY = value.groupBy { it.position.x.toInt() / step }.mapValues { (_, boxes) ->
                     boxes.groupBy { it.position.y.toInt() / step }
                 }
+                mergedBoxesByXByY = mutableMapOf()
+                for (cx in 0 until width.toInt() / step)
+                    for (cy in 0 until height.toInt() / step) {
+                        val cxCyList =
+                            mergedBoxesByXByY.getOrPut(cx) { mutableMapOf() }.getOrPut(cy) { mutableListOf() }
+                        for (x in cx - 1..cx + 1)
+                            for (y in cy - 1..cy + 1)
+                                boxesByXByY[x]?.get(y)?.let { cxCyList.addAll(it) }
+                    }
             }
 
-        fun collidesWithBoxFast(obj: Any, newPosition: Point): Boolean {
-            val cx = newPosition.x.toInt() / step
-            val cy = newPosition.y.toInt() / step
-            for (x in cx - 1..cx + 1)
-                for (y in cy - 1..cy + 1)
-                    if (boxesByXByY[cx]?.get(cy)?.any { box -> collides(obj, newPosition, box) } == true)
-                        return true
-            return false
-        }
+        fun collidesWithBoxFast(obj: Any, newPosition: Point): Boolean =
+            mergedBoxesByXByY[newPosition.x.toInt() / step]
+                ?.get(newPosition.y.toInt() / step)
+                ?.any { box -> collides(obj, newPosition, box) } ?: false
 
         private fun collides(obj: Any, newPosition: Point, box: Box) = when (obj) {
             is Player -> newPosition.x + 20 > box.position.x && newPosition.x - 20 < box.position.x + box.size.width &&
@@ -107,15 +112,21 @@ class Game {
 
     }
 
+    private val dxy = arrayOf(1, 0, 1)
     private fun updatePlayers() {
         for ((_, player) in players) {
-            val newPosition = Point(
-                player.x + player.dx * player.speed,
-                player.y + player.dy * player.speed
-            )
-            if (!gameWorld.collidesWithBoxFast(player, newPosition) && !gameWorld.collidesWithWall(newPosition)) {
-                player.x = newPosition.x
-                player.y = newPosition.y
+            var dx = 1
+            for (dy in dxy) { // try every possible move until not colliding
+                val newPosition = Point(
+                    player.x + dx * player.dx * player.speed,
+                    player.y + dy * player.dy * player.speed
+                )
+                if (!gameWorld.collidesWithBoxFast(player, newPosition) && !gameWorld.collidesWithWall(newPosition)) {
+                    player.x = newPosition.x
+                    player.y = newPosition.y
+                    break
+                }
+                dx = dy
             }
         }
     }
@@ -206,7 +217,7 @@ class Game {
             val bulletsToRemove = mutableSetOf<String>()
             for (bullet in bullets.values) {
                 for (player in players.values) {
-                    if (player.id != bullet.playerId && distance(bullet.x, bullet.y, player.x, player.y) < 20) {
+                    if (player.team != players[bullet.playerId]?.team && distance(bullet.x, bullet.y, player.x, player.y) < 20) {
                         player.health -= 10 // Bullet damage
                         explosions.add(HitEffect(bullet.x, bullet.y, 1f, type = 1))
                         bulletsToRemove.add(bullet.id)

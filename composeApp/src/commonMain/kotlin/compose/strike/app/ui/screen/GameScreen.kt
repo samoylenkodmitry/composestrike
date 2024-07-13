@@ -212,7 +212,7 @@ fun GameScreen() {
                     // Drawing players
                     gameState.players.values.forEach { player ->
                         drawCircle(
-                            color = if (player.id == playerId) Color.Green else Color.Blue,
+                            color = if (player.id == playerId) Color.Green else Color.Gray,
                             radius = 20f,
                             center = Offset(player.x, player.y)
                         )
