@@ -59,6 +59,10 @@ class Game {
         gameWorld.boxes = generateRandomBoxes()
         scores[Team.RED] = 0
         scores[Team.BLUE] = 0
+        resetFlags()
+        scores.clear()
+        explosions.clear()
+        bullets.clear()
     }
 
     private fun endGame() {
@@ -161,6 +165,9 @@ class Game {
 
     suspend fun removePlayer(playerId: String) {
         mutex.withLock {
+            for (flag in flags)
+                if (flag.holderId == playerId)
+                    flag.holderId = null
             players.remove(playerId)?.removeConnection()
             if (players.isEmpty()) {
                 gameLoopJob.cancel()
